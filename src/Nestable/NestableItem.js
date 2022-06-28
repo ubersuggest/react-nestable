@@ -1,24 +1,22 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import cx from 'classnames';
+import cn from 'classnames';
 
 import Icon from '../Icon';
 
 class NestableItem extends Component {
   static propTypes = {
-    item: PropTypes.object,
+    item: PropTypes.shape({
+      id: PropTypes.any.isRequired,
+    }),
     isCopy: PropTypes.bool,
     options: PropTypes.object,
     index: PropTypes.number,
-    depth: PropTypes.number,
-  };
-  static defaultProps = {
-    depth: 0,
   };
 
   renderCollapseIcon = ({ isCollapsed }) => (
     <Icon
-      className={cx('nestable-item-icon', {
+      className={cn('nestable-item-icon', {
         'icon-plus-gray': isCollapsed,
         'icon-minus-gray': !isCollapsed,
       })}
@@ -26,23 +24,22 @@ class NestableItem extends Component {
   );
 
   render() {
-    const { item, isCopy, options, index, depth } = this.props;
+    const { item, isCopy, options, index } = this.props;
     const {
       dragItem,
       renderItem,
       handler,
-      idProp,
       childrenProp,
       renderCollapseIcon = this.renderCollapseIcon,
     } = options;
 
     const isCollapsed = options.isCollapsed(item);
-    const isDragging = !isCopy && dragItem && dragItem[idProp] === item[idProp];
+    const isDragging = !isCopy && dragItem && dragItem.id === item.id;
     const hasChildren = item[childrenProp] && item[childrenProp].length > 0;
 
     let rowProps = {};
     let handlerProps = {};
-    let wrappedHandler;
+    let Handler;
 
     if (!isCopy) {
       if (dragItem) {
@@ -60,8 +57,8 @@ class NestableItem extends Component {
     }
 
     if (handler) {
-      wrappedHandler = <span className="nestable-item-handler" {...handlerProps}>{handler}</span>;
-      // wrappedHandler = React.cloneElement(handler, handlerProps);
+      Handler = <span className="nestable-item-handler" {...handlerProps}>{handler}</span>;
+      //Handler = React.cloneElement(handler, handlerProps);
     } else {
       rowProps = {
         ...rowProps,
@@ -79,9 +76,9 @@ class NestableItem extends Component {
 
     const baseClassName = 'nestable-item' + (isCopy ? '-copy' : '');
     const itemProps = {
-      className: cx(
+      className: cn(
           baseClassName,
-          baseClassName + '-' + item[idProp],
+          baseClassName + '-' + item.id,
           {
             'is-dragging': isDragging,
             [baseClassName + '--with-children']: hasChildren,
@@ -91,13 +88,7 @@ class NestableItem extends Component {
       )
     };
 
-    const content = renderItem({
-      collapseIcon,
-      depth,
-      handler: wrappedHandler,
-      index,
-      item,
-    });
+    const content = renderItem({ item, collapseIcon, handler: Handler, index });
 
     if (!content) return null;
 
@@ -114,7 +105,6 @@ class NestableItem extends Component {
                 <NestableItem
                   key={i}
                   index={i}
-                  depth={depth + 1}
                   item={item}
                   options={options}
                   isCopy={isCopy}

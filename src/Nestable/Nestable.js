@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import shallowCompare from 'react-addons-shallow-compare';
 import update from 'react-addons-update';
-import cx from 'classnames';
+import cn from 'classnames';
 
 import {
   isArray,
@@ -14,6 +14,7 @@ import {
   getAllNonEmptyNodesIds,
 } from '../utils';
 
+import './Nestable.css';
 import NestableItem from './NestableItem';
 
 class Nestable extends Component {
@@ -36,31 +37,36 @@ class Nestable extends Component {
   }
 
   static propTypes = {
-    childrenProp: PropTypes.string,
     className: PropTypes.string,
-    collapsed: PropTypes.bool,
-    confirmChange: PropTypes.func,
-    group: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-    handler: PropTypes.node,
-    idProp: PropTypes.string,
-    items: PropTypes.array,
-    maxDepth: PropTypes.number,
-    onChange: PropTypes.func,
-    renderCollapseIcon: PropTypes.func,
-    renderItem: PropTypes.func,
+    items: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.any.isRequired,
+      })
+    ),
     threshold: PropTypes.number,
+    maxDepth: PropTypes.number,
+    collapsed: PropTypes.bool,
+    group: PropTypes.oneOfType([
+      PropTypes.number,
+      PropTypes.string,
+    ]),
+    childrenProp: PropTypes.string,
+    renderItem: PropTypes.func,
+    renderCollapseIcon: PropTypes.func,
+    handler: PropTypes.node,
+    onChange: PropTypes.func,
+    confirmChange: PropTypes.func,
   };
   static defaultProps = {
-    childrenProp: 'children',
-    collapsed: false,
-    confirmChange: () => true,
-    group: Math.random().toString(36).slice(2),
-    idProp: 'id',
     items: [],
-    maxDepth: 10,
-    onChange: () => {},
-    renderItem: ({ item }) => String(item),
     threshold: 30,
+    maxDepth: 10,
+    collapsed: false,
+    group: Math.random().toString(36).slice(2),
+    childrenProp: 'children',
+    renderItem: ({ item }) => item.toString(),
+    onChange: () => {},
+    confirmChange: () => true,
   };
 
   componentDidMount() {
@@ -102,13 +108,13 @@ class Nestable extends Component {
   // Public Methods
   // ––––––––––––––––––––––––––––––––––––
   collapse = (itemIds) => {
-    const { idProp, childrenProp, collapsed } = this.props;
+    const { childrenProp, collapsed } = this.props;
     const { items } = this.state;
 
     if (itemIds === 'NONE') {
       this.setState({
         collapsedGroups: collapsed
-          ? getAllNonEmptyNodesIds(items, {idProp, childrenProp})
+          ? getAllNonEmptyNodesIds(items, childrenProp)
           : []
       });
 
@@ -116,12 +122,12 @@ class Nestable extends Component {
       this.setState({
         collapsedGroups: collapsed
           ? []
-          : getAllNonEmptyNodesIds(items, {idProp, childrenProp})
+          : getAllNonEmptyNodesIds(items, childrenProp)
       });
 
     } else if (isArray(itemIds)) {
       this.setState({
-        collapsedGroups: getAllNonEmptyNodesIds(items, {idProp, childrenProp})
+        collapsedGroups: getAllNonEmptyNodesIds(items, childrenProp)
           .filter(id => (itemIds.indexOf(id) > -1) ^ collapsed)
       });
     }
@@ -159,7 +165,7 @@ class Nestable extends Component {
       ? pathTo
       : pathTo.slice(0, -1);
     const destinationParent = this.getItemByPath(destinationPath);
-    if (!confirmChange({dragItem, destinationParent})) return;
+    if (!confirmChange(dragItem, destinationParent)) return;
 
     const removePath = this.getSplicePath(pathFrom, {
       numToRemove: 1,
@@ -183,8 +189,8 @@ class Nestable extends Component {
   }
 
   tryIncreaseDepth(dragItem) {
-    const { maxDepth, idProp, childrenProp, collapsed } = this.props;
-    const pathFrom = this.getPathById(dragItem[idProp]);
+    const { maxDepth, childrenProp, collapsed } = this.props;
+    const pathFrom = this.getPathById(dragItem.id);
     const itemIndex = pathFrom[pathFrom.length - 1];
     const newDepth = pathFrom.length + this.getItemDepth(dragItem);
 
@@ -213,8 +219,8 @@ class Nestable extends Component {
   }
 
   tryDecreaseDepth(dragItem) {
-    const { idProp, childrenProp, collapsed } = this.props;
-    const pathFrom = this.getPathById(dragItem[idProp]);
+    const { childrenProp, collapsed } = this.props;
+    const pathFrom = this.getPathById(dragItem.id);
     const itemIndex = pathFrom[pathFrom.length - 1];
 
     // has parent
@@ -240,7 +246,7 @@ class Nestable extends Component {
   }
 
   dragApply() {
-    const { onChange, idProp } = this.props;
+    const { onChange } = this.props;
     const { items, isDirty, dragItem } = this.state;
 
     this.setState({
@@ -249,10 +255,7 @@ class Nestable extends Component {
       isDirty: false,
     });
 
-    if (onChange && isDirty) {
-      const targetPath = this.getPathById(dragItem[idProp], items)
-      onChange({items, dragItem, targetPath});
-    }
+    onChange && isDirty && onChange(items, dragItem);
   }
 
   dragRevert() {
@@ -270,11 +273,11 @@ class Nestable extends Component {
   // Getter methods
   // ––––––––––––––––––––––––––––––––––––
   getPathById(id, items = this.state.items) {
-    const { idProp, childrenProp } = this.props;
+    const { childrenProp } = this.props;
     let path = [];
 
     items.every((item, i) => {
-      if (item[idProp] === id) {
+      if (item.id === id) {
         path.push(i);
       } else if (item[childrenProp]) {
         const childrenPath = this.getPathById(id, item[childrenProp]);
@@ -391,18 +394,11 @@ class Nestable extends Component {
   }
 
   getItemOptions() {
-    const {
-      renderItem,
-      renderCollapseIcon,
-      handler,
-      idProp,
-      childrenProp,
-    } = this.props;
+    const { renderItem, renderCollapseIcon, handler, childrenProp } = this.props;
     const { dragItem } = this.state;
 
     return {
       dragItem,
-      idProp,
       childrenProp,
       renderItem,
       renderCollapseIcon,
@@ -411,15 +407,15 @@ class Nestable extends Component {
       onDragStart: this.onDragStart,
       onMouseEnter: this.onMouseEnter,
       isCollapsed: this.isCollapsed,
-      onToggleCollapse: this.onToggleCollapse,
+      onToggleCollapse: this.onToggleCollapse
     };
   }
 
   isCollapsed = (item) => {
-    const { collapsed, idProp } = this.props;
+    const { collapsed } = this.props;
     const { collapsedGroups } = this.state;
 
-    return !!((collapsedGroups.indexOf(item[idProp]) > -1) ^ collapsed);
+    return !!((collapsedGroups.indexOf(item.id) > -1) ^ collapsed);
   };
 
   // ––––––––––––––––––––––––––––––––––––
@@ -462,11 +458,10 @@ class Nestable extends Component {
 
     if (!this.elCopyStyles) {
       const offset = getOffsetRect(this.el);
-      const scroll = getTotalScroll(this.el);
 
       this.elCopyStyles = {
-        marginTop: offset.top - clientY - scroll.top,
-        marginLeft: offset.left - clientX - scroll.left,
+        marginTop: offset.top - clientY,
+        marginLeft: offset.left - clientX,
         ...transformProps
       };
 
@@ -510,12 +505,12 @@ class Nestable extends Component {
       e.stopPropagation();
     }
 
-    const { collapsed, idProp, childrenProp } = this.props;
+    const { collapsed, childrenProp } = this.props;
     const { dragItem } = this.state;
-    if (dragItem[idProp] === item[idProp]) return;
+    if (dragItem.id === item.id) return;
 
-    const pathFrom = this.getPathById(dragItem[idProp]);
-    const pathTo = this.getPathById(item[idProp]);
+    const pathFrom = this.getPathById(dragItem.id);
+    const pathTo = this.getPathById(item.id);
 
     // if collapsed by default
     // and move last (by count) child
@@ -532,14 +527,14 @@ class Nestable extends Component {
   };
 
   onToggleCollapse = (item, isGetter) => {
-    const { collapsed, idProp } = this.props;
+    const { collapsed } = this.props;
     const { collapsedGroups } = this.state;
     const isCollapsed = this.isCollapsed(item);
 
     const newState = {
       collapsedGroups: (isCollapsed ^ collapsed)
-        ? collapsedGroups.filter(id => id !== item[idProp])
-        : collapsedGroups.concat(item[idProp])
+        ? collapsedGroups.filter(id => id !== item.id)
+        : collapsedGroups.concat(item.id)
     };
 
     if (isGetter) {
@@ -560,9 +555,9 @@ class Nestable extends Component {
   // Render methods
   // ––––––––––––––––––––––––––––––––––––
   renderDragLayer() {
-    const { group, idProp } = this.props;
+    const { group } = this.props;
     const { dragItem } = this.state;
-    const el = document.querySelector('.nestable-' + group + ' .nestable-item-' + dragItem[idProp]);
+    const el = document.querySelector('.nestable-' + group + ' .nestable-item-' + dragItem.id);
 
     let listStyles = {};
     if (el) {
@@ -596,7 +591,7 @@ class Nestable extends Component {
     const options = this.getItemOptions();
 
     return (
-      <div className={cx(className, 'nestable', 'nestable-' + group, { 'is-drag-active': dragItem })}>
+      <div className={cn(className, 'nestable', 'nestable-' + group, { 'is-drag-active': dragItem })}>
         <ol className="nestable-list nestable-group">
           {items.map((item, i) => {
             return (
